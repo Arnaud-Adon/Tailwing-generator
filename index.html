@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + TS</title>
+  </head>
+  <body>
+    <div id="iframe" class="min-h-full w-full bg-white">
+      <iframe id="generate-code" class="h-screen w-screen"></iframe>
+      <div
+        class="absolute bottom-0 right-1/2 translate-x-1/2 p-3 rounded-sm bg-zinc-500"
+      >
+        <form class="flex items-center gap-3" action="">
+          <textarea
+            class="p-2 bg-white rounded-md text-black"
+            name="prompt"
+            id="prompt"
+            cols="30"
+            rows="2"
+            placeholder="A beautiful landing page"
+          ></textarea>
+          <button type="submit" class="bg-blue-700">Generate</button>
+        </form>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

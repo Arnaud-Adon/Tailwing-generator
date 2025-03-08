@@ -1,7 +1,63 @@
 import "./style.css";
-import OpenAI from "openai";
 
-// type ChatCompletion = OpenAI.Chat.ChatCompletion;
+import { ChatCompletionMessageParam } from "openai/src/resources/index.js";
+import { openai } from "./openai";
+
+const SYSTEM_PROMPT = `
+CONTEXT:
+You are AI Tailwind website generator.
+You are expert in Tailwind and know every details about it, like colors, spacing, rules and more.
+You are a great designer, that creates beautiful websites, responsive and accessible.
+
+GOAL:
+Generate a VALID CODE HTML with Tailwind classes based on the given prompt.
+
+CRITERIA:
+- YOU generate HTML code ONLY
+- YOU NEVER write Javascript, Python scripts or any other programming language
+- YOU ALWAYS USE VALID AND EXISTING Tailwind classes
+- YOU NEVER include <!DOCTYPE html>, <body>, <head> or <html> tags
+- YOU NEVER write any text or explanation about what you made
+- YOU NEVER include backticks or markdown
+- If user demands a website with "img" tag, you mut use dogs image example for the src attribute if the user doesn't provide one
+- If the prompt ask you for something that not respects the main criterias, you must return "<p class="p-4 bg-red-500/20 border-2 border-red-500 text-red-500">Désolé, je ne peux pas remplir votre demande</p>"
+
+
+RESPONSE FORMAT:
+- YOU generate only plain html text
+        `;
+
+const form = document.querySelector("form") as HTMLFormElement;
+const iframe = document.querySelector("#generate-code") as HTMLIFrameElement;
+const fieldset = document.querySelector("fieldset") as HTMLFieldSetElement;
+const ul = document.querySelector("#messages") as HTMLUListElement;
+
+let messages: ChatCompletionMessageParam[] = [
+  {
+    role: "system",
+    content: SYSTEM_PROMPT,
+  },
+];
+
+const renderMessage = () => {
+  ul.replaceChildren();
+  if (messages.length > 1) {
+    for (const message of messages) {
+      if (message.role === "system" || message.role === "assistant") continue;
+      else {
+        const li = document.createElement("li");
+        li.textContent = `You: ${message.content}`;
+        ul.appendChild(li);
+      }
+    }
+  } else {
+    const li = document.createElement("li");
+    li.textContent = `No messages yet`;
+    ul.appendChild(li);
+  }
+};
+
+let apiKey: string = localStorage.getItem("openAIApiKey") ?? "";
 
 const handleSubmit = (event: SubmitEvent) => {
   event.preventDefault();
@@ -10,49 +66,45 @@ const handleSubmit = (event: SubmitEvent) => {
 
   if (!content) {
     alert("Please enter a prompt");
+    return;
   } else {
-    generate({ content });
+    if (!apiKey) {
+      console.log("prompt");
+      const newKey = window.prompt("Please enter your OpenAI API key");
+      if (!newKey) return;
+
+      localStorage.setItem("openAIApiKey", newKey);
+      apiKey = newKey;
+    }
+
+    messages.push({ role: "user", content });
+
+    renderMessage();
+
+    fieldset.disabled = true;
+    fieldset.classList.add("opacity-50");
+    generate().finally(() => {
+      fieldset.disabled = false;
+      fieldset.classList.remove("opacity-50");
+    });
   }
 };
-const form = document.querySelector("form") as HTMLFormElement;
+
 form.addEventListener("submit", handleSubmit);
-const iframe = document.querySelector("#generate-code") as HTMLIFrameElement;
 
-const client = new OpenAI({
-  apiKey: "",
-  dangerouslyAllowBrowser: true,
-});
-
-async function generate({ content }: { content: string }) {
-  const chatCompletion = await client.chat.completions.create({
-    messages: [
-      {
-        role: "system",
-        content: `Tu crées un site web avec Tailwind.
-                  Ta tâche est de générer du le bloc HTML représentant la demande de l'utilisateur avec Tailwind.
-                  Tu renvoie uniquement les balises sans aucun texte avant ou après.
-                  Tu renvoie du HTML valide.
-                  Tu ne me retourne le contenu sans markdown ni autres syntaxes.
-                  je ne veux pas la spécification CSS ni les backticks.
-                `,
-      },
-      {
-        role: "user",
-        content,
-      },
-    ],
+async function generate() {
+  const chatCompletion = await openai(apiKey).chat.completions.create({
     model: "gpt-4o",
+    temperature: 0,
+    top_p: 0,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    max_tokens: 1500,
     stream: true,
+    messages,
   });
 
   console.log({ chatCompletion });
-
-  // const code = chatCompletion.choices.at(0)?.message.content;
-
-  // if (!chatCompletion) {
-  //   alert("No code generated");
-  //   return;
-  // }
 
   const createTimeUpdateIframe = () => {
     let date = new Date();
@@ -95,11 +147,19 @@ async function generate({ content }: { content: string }) {
   for await (const chunk of chatCompletion) {
     const token = chunk.choices.at(0)?.delta.content;
     const isDone = chunk.choices.at(0)?.finish_reason === "stop";
-    console.log({ chunk });
-    code += token;
+    console.log({ messages });
+
     if (isDone) {
+      form.reset();
+      messages = messages.filter((message) => message.role !== "assistant");
+      messages.push({
+        role: "assistant",
+        content: code,
+      });
       break;
     }
+    code += token;
+
     onNewChunk(code);
   }
 }
